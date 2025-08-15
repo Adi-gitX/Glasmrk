@@ -26,17 +26,43 @@ export const decryptId = (encryptedId: string): string => {
   }
 };
 
-export const saveFile = (file: Omit<MarkdownFile, 'id' | 'encryptedId' | 'createdAt'>): MarkdownFile => {
+export const saveFile = async (file: Omit<MarkdownFile, 'id' | 'encryptedId' | 'createdAt'>): Promise<MarkdownFile> => {
+  // Try server API first
+  try {
+    const res = await fetch('/api/files/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(file)
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const id = json.id as string;
+      const newFile: MarkdownFile = {
+        ...file,
+        id,
+        encryptedId: id,
+        createdAt: new Date().toISOString()
+      };
+      // Optionally keep a local copy
+      const files = getFiles();
+      files.push(newFile);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
+      return newFile;
+    }
+  } catch {
+    // ignore and fallback to localStorage
+    console.warn('server save failed, falling back to localStorage');
+  }
+
+  // fallback: localStorage
   const files = getFiles();
   const id = uuidv4();
-  const encryptedId = generateEncryptedId();
   const newFile: MarkdownFile = {
     ...file,
     id,
-    encryptedId,
+    encryptedId: generateEncryptedId(),
     createdAt: new Date().toISOString()
   };
-  
   files.push(newFile);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
   return newFile;
@@ -51,15 +77,18 @@ export const getFiles = (): MarkdownFile[] => {
   }
 };
 
-export const getFileByEncryptedId = (encryptedId: string): MarkdownFile | null => {
-  const files = getFiles();
-  const foundFile = files.find(file => file.encryptedId === encryptedId);
-  if (!foundFile) {
-    // Try to find by decrypted ID as fallback
-    const decryptedId = decryptId(encryptedId);
-    return files.find(file => file.id === decryptedId) || null;
+export const getFileByEncryptedId = async (encryptedId: string): Promise<MarkdownFile | null> => {
+  // Try server first
+  try {
+    const res = await fetch(`/api/files/${encodeURIComponent(encryptedId)}`);
+    if (res.ok) return res.json();
+  } catch {
+    // fallback
   }
-  return foundFile;
+
+  const files = getFiles();
+  const foundFile = files.find(file => file.encryptedId === encryptedId || file.id === encryptedId);
+  return foundFile || null;
 };
 
 export const deleteFile = (id: string): boolean => {
