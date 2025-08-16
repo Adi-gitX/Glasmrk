@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Simple backend server to handle saving/getting markdown files using Upstash REST API.
-// Usage: node server/index.js
+// Usage: node server/index.cjs
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -60,7 +60,11 @@ app.get('/api/files/:id', async (req, res) => {
 
     const getUrl = `${UPSTASH_URL}/get/${encodeURIComponent(key)}`;
     const r = await fetch(getUrl, { headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` } });
-    if (!r.ok) return res.status(404).json({ error: 'not found' });
+    if (!r.ok) {
+      const text = await r.text();
+      console.error('Upstash get failed', { status: r.status, body: text, getUrl });
+      return res.status(502).json({ error: 'upstream_error', upstreamStatus: r.status, upstreamBody: text });
+    }
     const json = await r.json();
     if (!json.result) return res.status(404).json({ error: 'not found' });
     const parsed = JSON.parse(json.result);

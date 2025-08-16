@@ -38,8 +38,10 @@ export const saveFile = async (file: Omit<MarkdownFile, 'id' | 'encryptedId' | '
       body: JSON.stringify(file)
     });
     if (res.ok) {
-      const json = await res.json();
-      const id = json.id as string;
+  interface ServerSaveResponse { id: string; persisted?: boolean }
+  const json = await res.json() as ServerSaveResponse;
+  const id = json.id as string;
+  const persisted = json.persisted === true;
       const newFile: MarkdownFile = {
         ...file,
         id,
@@ -50,13 +52,23 @@ export const saveFile = async (file: Omit<MarkdownFile, 'id' | 'encryptedId' | '
       const files = getFiles();
       files.push(newFile);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
+      // If this is running in production (no local dev API), require persisted=true
+      const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (!API_BASE && !isLocal && !persisted) {
+        throw new Error('server did not persist file');
+      }
       return newFile;
     }
   } catch {
-    // ignore and fallback to localStorage
+    // ignore here; we'll fallback below only for local dev
   }
 
-  // fallback: localStorage
+  // fallback: localStorage allowed only in dev/local mode
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || API_BASE);
+  if (!isLocal) {
+    throw new Error('server unavailable and local fallback disabled in production');
+  }
+
   const files = getFiles();
   const id = uuidv4();
   const newFile: MarkdownFile = {

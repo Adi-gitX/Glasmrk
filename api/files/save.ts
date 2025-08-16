@@ -6,6 +6,8 @@ const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  // prevent caching at CDN/proxy layers
+  try { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); } catch { /* ignore in non-Node env */ }
 
   try {
     const { title, content } = req.body || {};
@@ -16,8 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const value = JSON.stringify({ id, title, content, createdAt: new Date().toISOString() });
 
     if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-      // If Upstash not configured, return id but don't persist
-      return res.status(201).json({ id });
+      console.error('Upstash credentials missing in environment');
+      return res.status(500).json({ error: 'upstash_not_configured' });
     }
 
     // Upstash REST set: POST {UPSTASH_URL}/set/<key>/<value>
@@ -29,11 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!r.ok) {
       const text = await r.text();
-      console.error('Upstash set failed', r.status, text);
-      return res.status(500).json({ error: 'failed to persist' });
+      console.error('Upstash set failed', { status: r.status, body: text, setUrl });
+      // return 502 to indicate upstream service error
+      return res.status(502).json({ error: 'failed to persist', upstreamStatus: r.status, upstreamBody: text });
     }
 
-    return res.status(201).json({ id });
+  return res.status(201).json({ id, persisted: true });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'internal error' });
