@@ -14,19 +14,31 @@ export const ViewPage: React.FC = () => {
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    if (!id) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
+    let mounted = true;
 
-    const foundFile = getFileByEncryptedId(id);
-    if (foundFile) {
-      setFile(foundFile);
-    } else {
-      setNotFound(true);
-    }
-    setLoading(false);
+    (async () => {
+      if (!id) {
+        if (!mounted) return;
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const foundFile = await getFileByEncryptedId(id);
+        if (!mounted) return;
+        if (foundFile) setFile(foundFile);
+        else setNotFound(true);
+      } catch {
+        if (mounted) setNotFound(true);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [id]);
 
   if (loading) {

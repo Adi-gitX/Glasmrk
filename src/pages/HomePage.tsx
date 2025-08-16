@@ -33,15 +33,26 @@ export const HomePage: React.FC = () => {
     // Simulate upload delay for better UX
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const savedFile = saveFile({
-      title: selectedFile.name.replace('.md', ''),
-      content: fileContent
-    });
+    try {
+      const savedFile = await saveFile({
+        title: selectedFile.name.replace('.md', ''),
+        content: fileContent
+      });
 
-  const url = `${window.location.origin}/view/${savedFile.encryptedId}`;
-  setShareUrl(url);
-  setIsUploading(false);
-  console.log('[HomePage] Upload complete, shareUrl=', url);
+      if (savedFile && savedFile.encryptedId) {
+        const url = `${window.location.origin}/view/${savedFile.encryptedId}`;
+        setShareUrl(url);
+        console.log('[HomePage] Upload complete, shareUrl=', url);
+      } else {
+        console.error('[HomePage] saveFile did not return an encryptedId', savedFile);
+        setShareUrl('');
+      }
+    } catch (err) {
+      console.error('[HomePage] failed to save file', err);
+      setShareUrl('');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const copyToClipboard = async () => {

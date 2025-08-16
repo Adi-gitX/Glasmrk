@@ -26,10 +26,13 @@ export const decryptId = (encryptedId: string): string => {
   }
 };
 
+const API_BASE = import.meta.env.VITE_API_BASE || '';
+
 export const saveFile = async (file: Omit<MarkdownFile, 'id' | 'encryptedId' | 'createdAt'>): Promise<MarkdownFile> => {
+  const endpoint = API_BASE ? `${API_BASE}/api/files/save` : '/api/files/save';
   // Try server API first
   try {
-    const res = await fetch('/api/files/save', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(file)
@@ -51,7 +54,6 @@ export const saveFile = async (file: Omit<MarkdownFile, 'id' | 'encryptedId' | '
     }
   } catch {
     // ignore and fallback to localStorage
-    console.warn('server save failed, falling back to localStorage');
   }
 
   // fallback: localStorage
@@ -78,9 +80,10 @@ export const getFiles = (): MarkdownFile[] => {
 };
 
 export const getFileByEncryptedId = async (encryptedId: string): Promise<MarkdownFile | null> => {
+  const endpoint = API_BASE ? `${API_BASE}/api/files/${encodeURIComponent(encryptedId)}` : `/api/files/${encodeURIComponent(encryptedId)}`;
   // Try server first
   try {
-    const res = await fetch(`/api/files/${encodeURIComponent(encryptedId)}`);
+    const res = await fetch(endpoint);
     if (res.ok) return res.json();
   } catch {
     // fallback
